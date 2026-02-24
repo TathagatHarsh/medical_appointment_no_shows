@@ -55,8 +55,14 @@ if st.button("Predict No-Show"):
     pred = model.predict(input_df)[0]
     prob = model.predict_proba(input_df)[0][1]
 
-    st.write(f"👩‍⚕️ Show probability: {1-prob:.2f}")
-    st.write(f"❌ No-show probability: {prob:.2f}")
+    st.info(f"👩‍⚕️ Show probability: {1-prob:.2%}")
+    st.warning(f"❌ No-show probability: {prob:.2%}")
+
+    st.subheader("Prediction Confidence")
+    st.write("Show probability")
+    st.progress(float(1 - prob))
+    st.write("No-show probability")
+    st.progress(float(prob))
     if pred == 1:
         st.error(f"⚠️ Likely No-Show (probability: {prob:.2f})")
     else:
