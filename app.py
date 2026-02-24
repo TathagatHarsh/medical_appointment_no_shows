@@ -16,16 +16,26 @@ model = joblib.load("model.joblib")
 
 st.subheader("Enter Patient Details")
 
+def yes_no_to_int(label):
+    return 1 if label == "Yes" else 0
+
 gender = st.selectbox("Gender", ["F", "M"])
 age = st.number_input("Age", min_value=0, max_value=120, value=30)
-scholarship = st.selectbox("Scholarship", [0, 1])
-hypertension = st.selectbox("Hypertension", [0, 1])
-diabetes = st.selectbox("Diabetes", [0, 1])
-alcoholism = st.selectbox("Alcoholism", [0, 1])
-handcap = st.selectbox("Handicap", [0, 1])
-sms_received = st.selectbox("SMS Received", [0, 1])
+scholarship_label = st.selectbox("Scholarship", ["No", "Yes"])
+hypertension_label = st.selectbox("Hypertension", ["No", "Yes"])
+diabetes_label = st.selectbox("Diabetes", ["No", "Yes"])
+alcoholism_label = st.selectbox("Alcoholism", ["No", "Yes"])
+handcap_label = st.selectbox("Handicap", ["No", "Yes"])
+sms_received_label = st.selectbox("SMS Received", ["No", "Yes"])
 waiting_days = st.number_input("Waiting Days", min_value=0, max_value=365, value=5)
 neighbourhood = st.selectbox("Neighbourhood", neighbourhoods, index=0)
+
+scholarship = yes_no_to_int(scholarship_label)
+hypertension = yes_no_to_int(hypertension_label)
+diabetes = yes_no_to_int(diabetes_label)
+alcoholism = yes_no_to_int(alcoholism_label)
+handcap = yes_no_to_int(handcap_label)
+sms_received = yes_no_to_int(sms_received_label)
 
 if st.button("Predict No-Show"):
     input_df = pd.DataFrame([{
