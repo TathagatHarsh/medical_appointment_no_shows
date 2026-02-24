@@ -10,6 +10,7 @@ neighbourhoods = load_neighbourhoods()
 
 st.set_page_config(page_title="No-Show Prediction", layout="centered")
 st.title("Clinical Appointment No-Show Prediction")
+st.write("This app predicts whether a patient will show up or miss their appointment based on demographic and scheduling features.")
 
 # Load trained model (we'll save this next)
 model = joblib.load("model.joblib")
@@ -54,6 +55,8 @@ if st.button("Predict No-Show"):
     pred = model.predict(input_df)[0]
     prob = model.predict_proba(input_df)[0][1]
 
+    st.write(f"👩‍⚕️ Show probability: {1-prob:.2f}")
+    st.write(f"❌ No-show probability: {prob:.2f}")
     if pred == 1:
         st.error(f"⚠️ Likely No-Show (probability: {prob:.2f})")
     else:
