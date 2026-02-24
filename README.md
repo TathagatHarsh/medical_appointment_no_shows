@@ -68,3 +68,15 @@ Models were evaluated using:
 - Confusion Matrix
 
 The model with better balanced precision–recall performance was selected as the final model for inference.
+
+---
+
+## 📸 Project Screenshots
+
+### Logistic Regression – Confusion Matrix
+
+![Confusion Matrix - Logistic Regression](assets/confusion_matrix_logreg.png)
+
+### Decision Tree – Confusion Matrix
+
+![Confusion Matrix - Decision Tree](assets/confusion_matrix_tree.png)
