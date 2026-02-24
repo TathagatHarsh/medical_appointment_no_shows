@@ -63,10 +63,7 @@ if st.button("Predict No-Show"):
     st.progress(float(1 - prob))
     st.write("No-show probability")
     st.progress(float(prob))
-    if pred == 1:
-        st.error(f"⚠️ Likely No-Show (probability: {prob:.2f})")
-    else:
-        st.success(f"✅ Likely to Show (probability: {1-prob:.2f})")
+
 
 st.caption("⚠️ This is a demo ML model for academic purposes. Predictions are not medical advice.")
 with st.expander("How this works"):
