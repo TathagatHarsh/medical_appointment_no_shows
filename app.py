@@ -1,6 +1,12 @@
 import streamlit as st
 import pandas as pd
 import joblib
+@st.cache_data
+def load_neighbourhoods():
+    df = pd.read_csv("medical_appointment_no_shows.csv")  # use your actual filename
+    return sorted(df["Neighbourhood"].unique().tolist())
+
+neighbourhoods = load_neighbourhoods()
 
 st.set_page_config(page_title="No-Show Prediction", layout="centered")
 st.title("Clinical Appointment No-Show Prediction")
@@ -19,7 +25,7 @@ alcoholism = st.selectbox("Alcoholism", [0, 1])
 handcap = st.selectbox("Handicap", [0, 1])
 sms_received = st.selectbox("SMS Received", [0, 1])
 waiting_days = st.number_input("Waiting Days", min_value=0, max_value=365, value=5)
-neighbourhood = st.text_input("Neighbourhood", "JARDIM DA PENHA")
+neighbourhood = st.selectbox("Neighbourhood", neighbourhoods, index=0)
 
 if st.button("Predict No-Show"):
     input_df = pd.DataFrame([{
