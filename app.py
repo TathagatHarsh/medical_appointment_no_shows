@@ -42,3 +42,10 @@ if st.button("Predict No-Show"):
         st.error(f"⚠️ Likely No-Show (probability: {prob:.2f})")
     else:
         st.success(f"✅ Likely to Show (probability: {1-prob:.2f})")
+
+st.caption("⚠️ This is a demo ML model for academic purposes. Predictions are not medical advice.")
+with st.expander("How this works"):
+    st.write("""
+    The model uses patient demographics and appointment details 
+    (e.g., age, waiting days, SMS reminders) to predict the likelihood of a no-show.
+    """)
