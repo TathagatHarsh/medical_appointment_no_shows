@@ -12,6 +12,24 @@ st.set_page_config(page_title="No-Show Prediction", layout="centered")
 st.title("Clinical Appointment No-Show Prediction")
 st.write("This app predicts whether a patient will show up or miss their appointment based on demographic and scheduling features.")
 
+import os
+from dotenv import load_dotenv
+from typing import TypedDict
+from langgraph.graph import StateGraph, END
+from langchain_groq import ChatGroq
+
+# Load .env file for local development
+load_dotenv()
+
+# Safely get Groq API key from Streamlit secrets or local .env
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    api_key = os.getenv("GROQ_API_KEY")
+
+if not api_key:
+    st.warning("⚠️ GROQ_API_KEY is not set. Please add it to your .env file or Streamlit secrets.")
+
 # Load trained model (we'll save this next)
 model = joblib.load("model.joblib")
 
@@ -27,40 +45,75 @@ def predict_risk(model, patient_data):
     
     return prob, risk
 
-def agent_decision(risk, patient_data):
-    lead_time = patient_data["WaitingDays"].values[0]
-    past_sms_received = patient_data["SMS_received"].values[0]
-    
-    if risk == "High":
-        action = "Call + SMS Reminder + Reschedule Option"
-        reason = "High predicted no-show probability"
-    elif risk == "Medium":
-        action = "Send SMS Reminder"
-        reason = "Moderate risk of missing appointment"
-    else:
-        action = "No action needed"
-        reason = "Low risk"
-    
-    return {
-        "action": action,
-        "reason": reason
-    }
+# --- LangGraph Definition ---
+class AgentState(TypedDict):
+    patient_data: dict
+    risk_level: str
+    probability: float
+    guidelines: str
+    action_plan: str
+    reasoning: str
+    final_report: dict
 
-guidelines = {
-    "High": "Patients with high no-show risk should receive phone calls and flexible rescheduling.",
-    "Medium": "Send SMS reminders 24 hours before appointment.",
-    "Low": "Standard scheduling is sufficient."
-}
-
-def generate_report(prob, risk, decision):
-    return {
-        "risk_level": risk,
-        "probability": float(prob),
-        "recommended_action": decision["action"],
-        "reason": decision["reason"],
-        "guideline": guidelines[risk],
-        "disclaimer": "AI-generated recommendation. Final decision should be made by healthcare professionals."
+def retrieve_guidelines(state: AgentState):
+    guidelines_dict = {
+        "High": "Patients with high no-show risk should receive personal phone calls and flexible rescheduling options.",
+        "Medium": "Send targeted SMS reminders 24 hours before the appointment.",
+        "Low": "Standard scheduling is sufficient. Send standard automated SMS."
     }
+    return {"guidelines": guidelines_dict.get(state["risk_level"], "")}
+
+def clinical_reasoning(state: AgentState):
+    llm = ChatGroq(temperature=0, model="llama3-8b-8192", api_key=api_key)
+    prompt = f"""
+    You are an AI Clinical Operations Assistant.
+    Given this patient's no-show risk profile, characteristics, and our guidelines, what action plan do you recommend?
+    
+    Patient Data: {state['patient_data']}
+    Risk Level: {state['risk_level']} (Probability: {state['probability']:.2f})
+    Standard Guidelines: {state['guidelines']}
+    
+    Provide a concise action plan (1 sentence) and a brief reason (1 sentence) separated by a newline.
+    Format your response EXACTLY like this:
+    ACTION: <your action>
+    REASON: <your reason>
+    """
+    
+    try:
+        response = llm.invoke(prompt)
+        content = response.content
+        lines = content.strip().split('\n')
+        action = [line.replace("ACTION:", "").strip() for line in lines if "ACTION:" in line][0]
+        reason = [line.replace("REASON:", "").strip() for line in lines if "REASON:" in line][0]
+    except Exception as e:
+        action = "Manual clinician review required"
+        reason = "LLM structuring failed or API error"
+        
+    return {"action_plan": action, "reasoning": reason}
+
+def generate_report(state: AgentState):
+    report = {
+        "risk_level": state["risk_level"],
+        "probability": float(state["probability"]),
+        "recommended_action": state["action_plan"],
+        "reason": state["reasoning"],
+        "guideline": state["guidelines"],
+        "disclaimer": "AI-generated recommendation via LangGraph & Groq API. Final decision should be made by healthcare professionals."
+    }
+    return {"final_report": report}
+
+workflow = StateGraph(AgentState)
+workflow.add_node("retrieve_guidelines", retrieve_guidelines)
+workflow.add_node("clinical_reasoning", clinical_reasoning)
+workflow.add_node("generate_report", generate_report)
+
+workflow.set_entry_point("retrieve_guidelines")
+workflow.add_edge("retrieve_guidelines", "clinical_reasoning")
+workflow.add_edge("clinical_reasoning", "generate_report")
+workflow.add_edge("generate_report", END)
+
+app_graph = workflow.compile()
+# ----------------------------
 
 st.subheader("Enter Patient Details")
 
@@ -100,8 +153,22 @@ if st.button("Predict No-Show"):
     }])
 
     prob, risk = predict_risk(model, input_df)
-    decision = agent_decision(risk, input_df)
-    report = generate_report(prob, risk, decision)
+    
+    patient_dict = input_df.to_dict('records')[0]
+    initial_state = {
+        "patient_data": patient_dict,
+        "risk_level": risk,
+        "probability": prob
+    }
+    
+    # Run the LangGraph
+    with st.spinner("AI Agent is reasoning about this patient..."):
+        try:
+            final_state = app_graph.invoke(initial_state)
+            report = final_state["final_report"]
+        except Exception as e:
+            st.error(f"Error running LangGraph: {str(e)}")
+            st.stop()
 
     col1, col2 = st.columns(2)
     with col1:
