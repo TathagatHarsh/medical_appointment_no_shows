@@ -17,6 +17,10 @@ from dotenv import load_dotenv
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
+from langchain_community.document_loaders import TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Load .env file for local development
 load_dotenv()
@@ -45,6 +49,18 @@ def predict_risk(model, patient_data):
     
     return prob, risk
 
+@st.cache_resource
+def get_vectorstore():
+    loader = TextLoader("guidelines.txt")
+    docs = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splits = text_splitter.split_documents(docs)
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    vectorstore = FAISS.from_documents(splits, embeddings)
+    return vectorstore
+
+vectorstore = get_vectorstore()
+
 # --- LangGraph Definition ---
 class AgentState(TypedDict):
     patient_data: dict
@@ -56,49 +72,44 @@ class AgentState(TypedDict):
     final_report: dict
 
 def retrieve_guidelines(state: AgentState):
-    guidelines_dict = {
-        "High": "Patients with high no-show risk should receive personal phone calls and flexible rescheduling options.",
-        "Medium": "Send targeted SMS reminders 24 hours before the appointment.",
-        "Low": "Standard scheduling is sufficient. Send standard automated SMS."
-    }
-    return {"guidelines": guidelines_dict.get(state["risk_level"], "")}
+    query = f"Intervention protocol for {state['risk_level']} risk patient"
+    docs = vectorstore.similarity_search(query, k=2)
+    guidelines_text = "\n".join([doc.page_content for doc in docs])
+    return {"guidelines": guidelines_text}
 
 def clinical_reasoning(state: AgentState):
     llm = ChatGroq(temperature=0, model="llama-3.1-8b-instant", api_key=api_key)
     prompt = f"""
     You are an AI Clinical Operations Assistant.
-    Given this patient's no-show risk profile, characteristics, and our guidelines, what action plan do you recommend?
+    Perform a risk analysis and multi-step planning intervention for this patient based strictly on the provided guidelines.
     
     Patient Data: {state['patient_data']}
     Risk Level: {state['risk_level']} (Probability: {state['probability']:.2f})
-    Standard Guidelines: {state['guidelines']}
+    Retrieved Operational Guidelines: 
+    {state['guidelines']}
     
-    Provide a concise action plan (1 sentence) and a brief reason (1 sentence) separated by a newline.
     Format your response EXACTLY like this:
-    ACTION: <your action>
-    REASON: <your reason>
+    SUMMARY: <Brief risk summary analysis>
+    INTERVENTION: <Actionable multi-step intervention plan based on guidelines>
     """
     
     try:
         response = llm.invoke(prompt)
         content = response.content
-        lines = content.strip().split('\n')
-        action = [line.replace("ACTION:", "").strip() for line in lines if "ACTION:" in line][0]
-        reason = [line.replace("REASON:", "").strip() for line in lines if "REASON:" in line][0]
+        summary = content.split("INTERVENTION:")[0].replace("SUMMARY:", "").strip()
+        intervention = content.split("INTERVENTION:")[1].strip()
     except Exception as e:
-        action = "Manual clinician review required"
-        reason = "LLM structuring failed or API error"
+        summary = "Error performing risk analysis."
+        intervention = f"Manual clinician review required. Error: {str(e)}"
         
-    return {"action_plan": action, "reasoning": reason}
+    return {"action_plan": intervention, "reasoning": summary}
 
 def generate_report(state: AgentState):
     report = {
-        "risk_level": state["risk_level"],
-        "probability": float(state["probability"]),
-        "recommended_action": state["action_plan"],
-        "reason": state["reasoning"],
-        "guideline": state["guidelines"],
-        "disclaimer": "AI-generated recommendation via LangGraph & Groq API. Final decision should be made by healthcare professionals."
+        "Risk Summary": state["reasoning"],
+        "Intervention": state["action_plan"],
+        "Sources": state["guidelines"],
+        "Disclaimer": "Operational and Ethical disclosures: AI-generated recommendation via LangGraph & FAISS RAG. Final clinical decisions must be made by human healthcare professionals strictly."
     }
     return {"final_report": report}
 
@@ -182,13 +193,14 @@ if st.button("Predict No-Show"):
     st.write("No-show probability")
     st.progress(float(prob))
 
-    st.subheader("🤖 AI Agent Recommendation")
-    st.markdown(f"**Risk Level:** `{report['risk_level']}`")
-    st.markdown(f"**Recommended Action:** {report['recommended_action']}")
-    st.markdown(f"**Reason:** {report['reason']}")
-    st.markdown(f"**Guidelines:** {report['guideline']}")
+    st.subheader("🤖 Structured Care Report")
+    st.markdown(f"**Risk Summary:**\n{report['Risk Summary']}")
+    st.markdown(f"**Intervention:**\n{report['Intervention']}")
     
-    st.caption(f"⚠️ {report['disclaimer']}")
+    with st.expander("View Retrieved Sources"):
+        st.write(report['Sources'])
+    
+    st.caption(f"⚠️ **Disclaimer:** {report['Disclaimer']}")
 with st.expander("How this works"):
     st.write("""
     The model uses patient demographics and appointment details 

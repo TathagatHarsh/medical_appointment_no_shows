@@ -8,3 +8,7 @@ langchain-groq
 langgraph
 langchain-core
 python-dotenv
+faiss-cpu
+langchain-community
+langchain-huggingface
+sentence-transformers
