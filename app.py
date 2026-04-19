@@ -64,7 +64,7 @@ def retrieve_guidelines(state: AgentState):
     return {"guidelines": guidelines_dict.get(state["risk_level"], "")}
 
 def clinical_reasoning(state: AgentState):
-    llm = ChatGroq(temperature=0, model="llama3-8b-8192", api_key=api_key)
+    llm = ChatGroq(temperature=0, model="llama-3.1-8b-instant", api_key=api_key)
     prompt = f"""
     You are an AI Clinical Operations Assistant.
     Given this patient's no-show risk profile, characteristics, and our guidelines, what action plan do you recommend?
